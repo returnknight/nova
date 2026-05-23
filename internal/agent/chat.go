@@ -74,6 +74,22 @@ func (s *ChatService) Run(
 	req ChatRequest,
 	emit func(Event),
 ) {
+	originalMessage := req.Message
+	var resumeInterruption *session.Interruption
+	if shouldResumeInterruptedRequest(req.Message) {
+		resumeInterruption = sess.PendingInterruption()
+		if resumeInterruption != nil {
+			req.Message = buildInterruptedResumeMessage(req.Message, resumeInterruption)
+		}
+	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			log.Printf("[agent-run] panic recovered err=%v", recovered)
+			markInterruptionIfNeeded(sess, resumeInterruption, originalMessage, "", fmt.Sprint(recovered))
+			emit(Event{Type: "error", Data: map[string]string{"message": "Agent 异常中断"}})
+		}
+	}()
+
 	agentMessage := req.Message
 	if req.PlanMode {
 		agentMessage = appendPlanModeInstruction(agentMessage)
@@ -91,7 +107,7 @@ func (s *ChatService) Run(
 	}
 	agentMessage = appendContextBoundaryInstruction(agentMessage)
 
-	_ = sess.Append(schema.UserMessage(req.Message))
+	_ = sess.Append(schema.UserMessage(originalMessage))
 	history := append([]*schema.Message(nil), sess.GetEffectiveMessages()...)
 	if len(history) > 0 {
 		history[len(history)-1] = schema.UserMessage(agentMessage)
@@ -114,7 +130,8 @@ func (s *ChatService) Run(
 		}
 		if event.Err != nil {
 			log.Printf("[agent-run] interrupted reason=runner_error err=%v generated_bytes=%d", event.Err, fullContent.Len())
-			appendAssistantIfAny(sess, &fullContent)
+			generated := appendAssistantIfAny(sess, &fullContent)
+			markInterruptionIfNeeded(sess, resumeInterruption, originalMessage, generated, event.Err.Error())
 			emit(Event{Type: "error", Data: map[string]string{"message": event.Err.Error()}})
 			return
 		}
@@ -150,7 +167,8 @@ func (s *ChatService) Run(
 		}
 		if mv.IsStreaming && mv.MessageStream != nil {
 			if !processStreamingEvent(mv, &fullContent, emit) {
-				appendAssistantIfAny(sess, &fullContent)
+				generated := appendAssistantIfAny(sess, &fullContent)
+				markInterruptionIfNeeded(sess, resumeInterruption, originalMessage, generated, "stream recv error")
 				return
 			}
 			continue
@@ -161,18 +179,69 @@ func (s *ChatService) Run(
 	}
 
 	appendAssistantIfAny(sess, &fullContent)
+	if resumeInterruption != nil {
+		if err := sess.ResolveInterruption(resumeInterruption.ID); err != nil {
+			log.Printf("[agent-run] resolve interruption failed id=%s err=%v", resumeInterruption.ID, err)
+		}
+	}
 	log.Printf("[agent-run] completed")
 	emit(Event{Type: "done", Data: map[string]string{}})
 }
 
 // appendAssistantIfAny 将已生成的正文持久化，避免异常中断后刷新丢失输出。
-func appendAssistantIfAny(sess *session.Session, content *strings.Builder) {
+func appendAssistantIfAny(sess *session.Session, content *strings.Builder) string {
 	if content == nil || content.Len() == 0 {
+		return ""
+	}
+	generated := content.String()
+	_ = sess.Append(schema.AssistantMessage(generated, nil))
+	log.Printf("[agent-run] persisted assistant message bytes=%d", len(generated))
+	content.Reset()
+	return generated
+}
+
+func markInterruptionIfNeeded(sess *session.Session, resumed *session.Interruption, userMessage, assistantContent, reason string) {
+	if resumed != nil {
 		return
 	}
-	_ = sess.Append(schema.AssistantMessage(content.String(), nil))
-	log.Printf("[agent-run] persisted assistant message bytes=%d", content.Len())
-	content.Reset()
+	if err := sess.MarkInterrupted(userMessage, assistantContent, reason); err != nil {
+		log.Printf("[agent-run] mark interruption failed err=%v", err)
+	}
+}
+
+func shouldResumeInterruptedRequest(message string) bool {
+	trimmed := strings.TrimSpace(message)
+	if trimmed == "" {
+		return false
+	}
+	switch trimmed {
+	case "继续", "继续。", "继续！", "接着来", "接着写", "续上", "继续刚才":
+		return true
+	}
+	return strings.HasPrefix(trimmed, "继续刚才") || strings.HasPrefix(trimmed, "继续之前") || strings.HasPrefix(trimmed, "从中断的地方继续")
+}
+
+func buildInterruptedResumeMessage(current string, interrupted *session.Interruption) string {
+	if interrupted == nil {
+		return current
+	}
+	var sb strings.Builder
+	sb.WriteString("[异常中断恢复]\n")
+	sb.WriteString("用户当前要求继续。请从上一轮异常中断的位置继续，不要重做已经完成且已经写入文件的工作。\n")
+	sb.WriteString("如果上一轮已有部分助手输出，请把它作为已完成内容的上下文，继续完成原始请求。\n\n")
+	sb.WriteString("上一轮原始请求：\n")
+	sb.WriteString(interrupted.UserMessage)
+	if interrupted.AssistantContent != "" {
+		sb.WriteString("\n\n上一轮中断前已生成的助手内容：\n")
+		sb.WriteString(interrupted.AssistantContent)
+	}
+	if interrupted.Reason != "" {
+		sb.WriteString("\n\n上一轮中断原因：\n")
+		sb.WriteString(interrupted.Reason)
+	}
+	sb.WriteString("\n\n本轮用户继续请求：\n")
+	sb.WriteString(current)
+	return sb.String()
 }
 
 // appendReferenceContext 将用户引用的文件内容追加到本次 Agent 输入。

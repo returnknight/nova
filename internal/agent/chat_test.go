@@ -9,6 +9,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 
 	"nova/internal/book"
+	"nova/internal/session"
 )
 
 func TestMergeToolCalls(t *testing.T) {
@@ -139,8 +140,8 @@ func TestAppendStyleRulesHintEmitsSceneAndStyles(t *testing.T) {
 	got := appendStyleRulesHint("续写第三章", []StyleRule{
 		{Scene: "激烈打斗", Styles: []string{"古龙.md", "番茄.txt"}},
 		{Scene: "日常对话", Styles: []string{"温吞.md"}},
-		{Scene: "", Styles: []string{"无效.md"}},          // 应被跳过
-		{Scene: "空风格", Styles: []string{"", " "}},      // 空文件名应被跳过
+		{Scene: "", Styles: []string{"无效.md"}},    // 应被跳过
+		{Scene: "空风格", Styles: []string{"", " "}}, // 空文件名应被跳过
 	})
 
 	assertContains(t, got, "续写第三章")
@@ -154,6 +155,32 @@ func TestAppendStyleRulesHintEmitsSceneAndStyles(t *testing.T) {
 	assertContains(t, got, "完全忽略以上规则")
 	if strings.Contains(got, "无效.md") {
 		t.Fatalf("空 scene 的规则应被跳过，但仍包含 无效.md：\n%s", got)
+	}
+}
+
+func TestBuildInterruptedResumeMessageIncludesInterruptedContext(t *testing.T) {
+	got := buildInterruptedResumeMessage("继续", &session.Interruption{
+		UserMessage:      "写第一章",
+		AssistantContent: "已经写出的片段",
+		Reason:           "runner error",
+	})
+
+	assertContains(t, got, "[异常中断恢复]")
+	assertContains(t, got, "用户当前要求继续")
+	assertContains(t, got, "写第一章")
+	assertContains(t, got, "已经写出的片段")
+	assertContains(t, got, "runner error")
+}
+
+func TestShouldResumeInterruptedRequestOnlyMatchesExplicitContinue(t *testing.T) {
+	if !shouldResumeInterruptedRequest("继续") {
+		t.Fatal("明确的继续请求应触发异常恢复")
+	}
+	if !shouldResumeInterruptedRequest("继续刚才的任务") {
+		t.Fatal("继续刚才的任务应触发异常恢复")
+	}
+	if shouldResumeInterruptedRequest("帮我写下一章") {
+		t.Fatal("普通请求不应触发异常恢复")
 	}
 }
 

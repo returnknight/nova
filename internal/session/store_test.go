@@ -136,3 +136,45 @@ func TestDeleteRejectsOnlySession(t *testing.T) {
 		t.Fatal("删除唯一会话应失败")
 	}
 }
+
+func TestInterruptionPersistsPendingRecordAndCanResolve(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess, err := store.GetOrCreate("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sess.MarkInterrupted("写第一章", "已经写出的片段", "runner error"); err != nil {
+		t.Fatal(err)
+	}
+
+	reloadedStore, err := NewStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := reloadedStore.Get("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pending := reloaded.PendingInterruption()
+	if pending == nil {
+		t.Fatal("异常中断标识应在重载后保留")
+	}
+	if pending.UserMessage != "写第一章" || pending.AssistantContent != "已经写出的片段" || pending.Reason != "runner error" {
+		t.Fatalf("异常中断信息不完整: %#v", pending)
+	}
+
+	if err := reloaded.ResolveInterruption(pending.ID); err != nil {
+		t.Fatal(err)
+	}
+	reloadedAgain, err := reloadedStore.Get("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reloadedAgain.PendingInterruption(); got != nil {
+		t.Fatalf("已解决的中断不应继续待恢复: %#v", got)
+	}
+}

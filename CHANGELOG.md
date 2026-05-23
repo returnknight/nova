@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- 后端 `session` / `agent`：新增异常中断恢复标识持久化；Runner/流式读取异常或 Agent panic 时记录待恢复中断，用户后续明确输入“继续/继续刚才/从中断的地方继续”等请求时，会从上一轮异常中断上下文续跑，成功完成后标记该中断已恢复；前端/SSE 断线但后端任务仍运行时仍沿用现有 active task 重连，不写入异常标识
 - 后端 `config`：新增 `Settings.StyleRules`（工作区级「场景 → 风格文件」规则集，类型为 `[]StyleRule{Scene, Styles}`），分层 Merge 中 `nil` 表示继承、空切片表示显式清空、非空切片整体覆盖；新增 `TestMergeStyleRules` 单测覆盖三种语义
 - 后端 `agent`：当用户本轮未通过 `#` 指定风格参考时，由 `App.StartTask` 从工作区配置读取 `StyleRules` 注入 `ChatRequest.StyleRules`，`ChatService` 通过新增 `appendStyleRulesHint` 在用户消息后追加「场景化默认风格规则 + 触发规则」——仅当 Agent 判定本轮属于章节正文创作/续写/重写时，才根据本轮章节内容选出最匹配的场景并 `read_file` 加载对应风格文件，其他场景（脑暴、大纲、设定、问答等）一律忽略；本轮显式 `#` 指定时仍按原"本轮覆盖默认"语义处理，不注入规则建议
 - WebUI：设置页「当前工作区」分层新增「场景化风格规则」分组，采用渐进式披露的「场景 + 风格」编辑器——每条规则一个场景描述输入框，风格文件列表默认折叠（仅显示已选概要），点击「风格 (N)」按钮才展开多选；支持新增/删除规则；继承生效时显示只读概要；类型 `Settings.style_rules` 与 `StyleRule` 同步加入

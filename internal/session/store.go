@@ -17,10 +17,14 @@ import (
 )
 
 const (
-	defaultSessionID    = "default"
-	defaultSessionTitle = "新会话"
-	historyTypeMessage  = "message"
-	historyTypeClear    = "clear"
+	defaultSessionID     = "default"
+	defaultSessionTitle  = "新会话"
+	historyTypeMessage   = "message"
+	historyTypeClear     = "clear"
+	historyTypeInterrupt = "interrupt"
+
+	InterruptionPending  = "pending"
+	InterruptionResolved = "resolved"
 )
 
 // HistoryEntry 表示用于前端展示的会话历史记录。
@@ -33,9 +37,21 @@ type HistoryEntry struct {
 }
 
 type historyRecord struct {
-	kind      string
-	message   *schema.Message
-	createdAt time.Time
+	kind         string
+	message      *schema.Message
+	interruption *Interruption
+	createdAt    time.Time
+}
+
+// Interruption 表示一次异常中断后可恢复的对话轮次。
+type Interruption struct {
+	ID               string     `json:"id"`
+	Status           string     `json:"status"`
+	UserMessage      string     `json:"user_message"`
+	AssistantContent string     `json:"assistant_content,omitempty"`
+	Reason           string     `json:"reason,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	ResolvedAt       *time.Time `json:"resolved_at,omitempty"`
 }
 
 // Session 保存单个会话的内存状态。
@@ -77,6 +93,63 @@ func (s *Session) AppendClearMarker() error {
 	s.records = append(s.records, historyRecord{kind: historyTypeClear, createdAt: now})
 	s.UpdatedAt = now
 	return s.persistLocked()
+}
+
+// MarkInterrupted 记录一次异常中断，供用户后续明确要求继续时恢复。
+func (s *Session) MarkInterrupted(userMessage, assistantContent, reason string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now().UTC()
+	record := &Interruption{
+		ID:               newInterruptionID(),
+		Status:           InterruptionPending,
+		UserMessage:      strings.TrimSpace(userMessage),
+		AssistantContent: assistantContent,
+		Reason:           strings.TrimSpace(reason),
+		CreatedAt:        now,
+	}
+	s.records = append(s.records, historyRecord{kind: historyTypeInterrupt, interruption: record, createdAt: now})
+	s.UpdatedAt = now
+	return s.persistLocked()
+}
+
+// PendingInterruption 返回最近一条待恢复的异常中断记录。
+func (s *Session) PendingInterruption() *Interruption {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i := len(s.records) - 1; i >= 0; i-- {
+		record := s.records[i]
+		if record.kind != historyTypeInterrupt || record.interruption == nil {
+			continue
+		}
+		if record.interruption.Status == InterruptionPending {
+			copied := *record.interruption
+			return &copied
+		}
+	}
+	return nil
+}
+
+// ResolveInterruption 标记异常中断已被恢复处理。
+func (s *Session) ResolveInterruption(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now().UTC()
+	for _, record := range s.records {
+		if record.kind != historyTypeInterrupt || record.interruption == nil {
+			continue
+		}
+		if record.interruption.ID == id {
+			record.interruption.Status = InterruptionResolved
+			record.interruption.ResolvedAt = &now
+			s.UpdatedAt = now
+			return s.persistLocked()
+		}
+	}
+	return fmt.Errorf("异常中断记录不存在: %s", id)
 }
 
 // GetMessages 返回所有消息的快照。
@@ -185,6 +258,13 @@ func (s *Session) persistLocked() error {
 		switch record.kind {
 		case historyTypeClear:
 			if err := writeJSONLine(&sb, clearRecord{Type: historyTypeClear, CreatedAt: record.createdAt}); err != nil {
+				return err
+			}
+		case historyTypeInterrupt:
+			if record.interruption == nil {
+				continue
+			}
+			if err := writeJSONLine(&sb, interruptionRecord{Type: historyTypeInterrupt, Interruption: *record.interruption}); err != nil {
 				return err
 			}
 		case historyTypeMessage:
@@ -447,6 +527,11 @@ type clearRecord struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type interruptionRecord struct {
+	Type string `json:"type"`
+	Interruption
+}
+
 type activeSessionState struct {
 	ActiveID string `json:"active_id"`
 }
@@ -567,6 +652,24 @@ func appendRecordLine(sess *Session, line string) error {
 		}
 		return nil
 	}
+	if typed.Type == historyTypeInterrupt {
+		var marker interruptionRecord
+		if err := json.Unmarshal([]byte(line), &marker); err != nil {
+			return err
+		}
+		interruption := marker.Interruption
+		if strings.TrimSpace(interruption.ID) == "" {
+			interruption.ID = newInterruptionID()
+		}
+		if strings.TrimSpace(interruption.Status) == "" {
+			interruption.Status = InterruptionPending
+		}
+		sess.records = append(sess.records, historyRecord{kind: historyTypeInterrupt, interruption: &interruption, createdAt: interruption.CreatedAt})
+		if interruption.CreatedAt.After(sess.UpdatedAt) {
+			sess.UpdatedAt = interruption.CreatedAt
+		}
+		return nil
+	}
 	return appendMessageLine(sess, line)
 }
 
@@ -612,6 +715,10 @@ func newSessionID() string {
 		return "s-" + time.Now().UTC().Format("20060102150405") + "-" + hex.EncodeToString(b[:])
 	}
 	return fmt.Sprintf("s-%d", time.Now().UTC().UnixNano())
+}
+
+func newInterruptionID() string {
+	return strings.TrimPrefix(newSessionID(), "s-")
 }
 
 func deriveTitle(content string) string {
