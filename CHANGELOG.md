@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- 互动模式：故事舞台对话内容新增随主题文字色变化的对白文字高亮，支持 `“”`、`「」` 和英文双引号 `""` 包裹的对白，历史回合与流式输出均生效
 - 后端 API：新增 `GET /api/workspace/summary`，统计当前书籍标题、章节数、全书字数以及每章标题、字数、状态和更新时间，供 WebUI 写作工作台展示进度
 
 ### Fixed
@@ -18,7 +19,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- WebUI：互动模式 Activity Bar 与 IDE 模式按钮隔离，并新增互动资料库、场景记忆左右面板 toggle；设置入口在两种模式下均可打开，设置页按 IDE/互动模式分 tab 展示，公共配置在两个 tab 下保持可见
+- WebUI：统一原生滚动条与 Radix ScrollArea 的深色主题样式，降低系统默认滚动条在设置弹窗、侧栏和对话区中的突兀感
+- WebUI：互动模式 Activity Bar 与 IDE 模式按钮隔离，并新增互动资料库、场景记忆左右面板 toggle；设置入口改为可调整大小的大型全局弹窗，在两种模式下均可打开，弹窗内按 IDE/互动模式分 tab 展示，公共配置在两个 tab 下保持可见
 - WebUI：IDE 模式左侧新增「作品目录 / 项目文件」切换，章节目录展示章节标题、字数和状态；编辑器标题栏和底部状态栏展示当前章节与全书统计；创作 Agent 空状态新增续写、润色、摘要和一致性检查快捷动作
 - WebUI：优化互动故事工作台界面层级，顶部改为中文创作流程导航，左侧设定区升级为资料库概览，中间故事舞台增加正文/对话/推演工作区切换，右侧快照区升级为场景记忆面板，底部剧情时间线默认轻量折叠
 - WebUI：聊天历史首次加载时直接定位到底部，避免刷新页面后 Chat 面板从顶部平滑滚动到末尾

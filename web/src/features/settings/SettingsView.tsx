@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { ReactNode } from 'react'
+import { X } from 'lucide-react'
 import type { LayeredSettings, Settings, SettingsLayer, StyleRule } from './types'
 import { fetchSettings, updateUserSettings, updateWorkspaceSettings } from './api'
 import { getStyles } from '@/lib/api'
 
 type SettingsScope = 'ide' | 'interactive'
 
-export function SettingsView() {
+export function SettingsView({ onClose }: { onClose?: () => void }) {
   const [layered, setLayered] = useState<LayeredSettings | null>(null)
   const [activeLayer, setActiveLayer] = useState<SettingsLayer>('user')
   const [activeScope, setActiveScope] = useState<SettingsScope>('ide')
@@ -102,12 +103,24 @@ export function SettingsView() {
           ))}
         </div>
         <button
+          type="button"
           onClick={onSave}
           disabled={saving}
           className="ml-auto rounded bg-[#0e639c] px-3 py-0.5 text-white disabled:opacity-50"
         >
           {saving ? '保存中…' : '保存'}
         </button>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded p-1 text-[#858b96] hover:bg-[#303238] hover:text-[#d7dbe2]"
+            aria-label="关闭设置"
+            title="关闭设置"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
       {error && <div className="border-b border-red-500/40 bg-red-500/10 px-3 py-1 text-xs text-red-400">{error}</div>}

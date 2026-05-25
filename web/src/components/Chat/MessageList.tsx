@@ -6,10 +6,11 @@ interface MessageListProps {
   messages: ChatMessage[]
   isStreaming: boolean
   activityContent: string
+  highlightDialogue?: boolean
 }
 
 /** 消息列表组件，支持流式内容实时展示和自动滚动 */
-export function MessageList({ messages, isStreaming, activityContent }: MessageListProps) {
+export function MessageList({ messages, isStreaming, activityContent, highlightDialogue = false }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const shouldAutoScrollRef = useRef(true)
@@ -84,7 +85,7 @@ export function MessageList({ messages, isStreaming, activityContent }: MessageL
       {messages.map((msg, i) => (
         msg.type === 'clear'
           ? <ContextClearDivider key={msg.id || msg.created_at || i} createdAt={msg.created_at} />
-          : <MessageItem key={msg.id || i} message={msg} />
+          : <MessageItem key={msg.id || i} message={msg} highlightDialogue={highlightDialogue} />
       ))}
 
       {isStreaming && (

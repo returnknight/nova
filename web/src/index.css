@@ -8,6 +8,34 @@ body,
   background: #18191b;
 }
 
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #4a5260 #17191d;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #17191d;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid #17191d;
+  border-radius: 999px;
+  background: #3f4652;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #596273;
+}
+
+*::-webkit-scrollbar-corner {
+  background: #17191d;
+}
+
 /* TipTap 编辑器内容样式 */
 .editor-content .tiptap {
   outline: none;
@@ -259,4 +287,9 @@ body,
 .chat-agent-message th {
   background: #25262a;
   color: #d7dbe2;
+}
+
+.nova-dialogue-highlight {
+  color: color-mix(in srgb, currentColor 35%, #ffd166);
+  text-shadow: 0 0 14px color-mix(in srgb, currentColor 22%, transparent);
 }

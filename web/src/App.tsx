@@ -13,6 +13,7 @@ import { fetchSettings } from '@/features/settings/api'
 import { WorkspaceLayout } from '@/components/layout/workspace-layout'
 import { CommandPalette } from '@/components/common/command-palette'
 import { TooltipIconButton } from '@/components/common/tooltip-icon-button'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useWorkspace } from '@/hooks/useWorkspace'
 import { useChat } from '@/hooks/useChat'
 import { useWorkspaceHotkeys } from '@/hooks/use-workspace-hotkeys'
@@ -49,12 +50,10 @@ const MAX_OPEN_TABS_FALLBACK = 5
 type Tab =
   | { kind: 'file'; path: string }
   | { kind: 'home' }
-  | { kind: 'settings' }
 
 /** Tab 唯一标识，用于 React key 与持久化匹配 */
 function tabKey(tab: Tab): string {
   if (tab.kind === 'home') return 'home'
-  if (tab.kind === 'settings') return 'settings'
   return `file:${tab.path}`
 }
 
@@ -104,7 +103,6 @@ function enforceTabLimit(tabs: Tab[], protectedKey: string | null, max: number, 
 /** Tab 显示标题 */
 function tabLabel(tab: Tab): string {
   if (tab.kind === 'home') return '书籍管理'
-  if (tab.kind === 'settings') return '设置'
   return tab.path.split('/').pop() || tab.path
 }
 
@@ -131,7 +129,6 @@ function readTabsFor(workspace: string): Tab[] {
     const tabs = parsed.flatMap((item): Tab[] => {
       if (item && typeof item === 'object') {
         if (item.kind === 'home') return [{ kind: 'home' }]
-        if (item.kind === 'settings') return [{ kind: 'settings' }]
         if (item.kind === 'file' && typeof item.path === 'string') return [{ kind: 'file', path: item.path }]
       }
       // 兼容旧版本（仅文件路径字符串）
@@ -156,6 +153,7 @@ function App() {
   const [interactiveRightVisible, setInteractiveRightVisible] = useState(() => readLayoutBoolean(INTERACTIVE_RIGHT_VISIBLE_KEY, true))
   const [saveSignal, setSaveSignal] = useState(0)
   const [gitRefreshSignal, setGitRefreshSignal] = useState(0)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [openTabs, setOpenTabs] = useState<Tab[]>([])
   const [activeTabKey, setActiveTabKey] = useState<string | null>(null)
   const [maxOpenTabs, setMaxOpenTabs] = useState<number>(MAX_OPEN_TABS_FALLBACK)
@@ -419,15 +417,6 @@ function App() {
     setActiveTabKey('home')
   }, [limitTabs])
 
-  /** 打开设置 tab：已存在则定位，否则追加并激活 */
-  const openSettingsTab = useCallback(() => {
-    setOpenTabs((prev) => {
-      const next: Tab[] = prev.some((t) => t.kind === 'settings') ? prev : [...prev, { kind: 'settings' }]
-      return limitTabs(next, 'settings')
-    })
-    setActiveTabKey('settings')
-  }, [limitTabs])
-
   /** 关闭 tab；若关闭的是当前激活 tab，则切换到相邻 tab */
   const handleCloseTab = useCallback((tab: Tab) => {
     const key = tabKey(tab)
@@ -555,8 +544,8 @@ function App() {
       {mode === 'ide' ? ideActivityButtons : interactiveActivityButtons}
       <TooltipIconButton
         label="设置"
-        onClick={openSettingsTab}
-        className={`mt-auto hover:bg-[#303238] ${activeTabKey === 'settings' ? 'text-[#d7dbe2]' : 'text-[#a8adb7]'}`}
+        onClick={() => setSettingsOpen((open) => !open)}
+        className={`mt-auto hover:bg-[#303238] ${settingsOpen ? 'text-[#d7dbe2]' : 'text-[#a8adb7]'}`}
       >
         <Settings className="h-4 w-4" />
       </TooltipIconButton>
@@ -637,7 +626,6 @@ function App() {
   )
 
   const activeTab = openTabs.find((t) => tabKey(t) === activeTabKey) ?? null
-  const settingsActive = activeTab?.kind === 'settings'
 
   const tabBar = (
     <div className="flex h-9 shrink-0 items-stretch overflow-x-auto border-b border-[#303238] bg-[#202124] text-xs">
@@ -684,7 +672,7 @@ function App() {
 
   const main = (
     <main className="flex h-full min-w-0 flex-col border-r border-[#303238] bg-[#1b1c1f]">
-      {mode === 'interactive' && !settingsActive ? (
+      {mode === 'interactive' ? (
         <InteractiveLayout
           leftPanelVisible={interactiveLeftVisible}
           rightPanelVisible={interactiveRightVisible}
@@ -700,8 +688,6 @@ function App() {
                 onSwitch={handleWorkspaceSwitch}
                 onBooksChange={refreshBooks}
               />
-            ) : activeTab?.kind === 'settings' ? (
-              <SettingsView />
             ) : activeTab?.kind === 'file' ? (
               <MarkdownEditor
                 fileName={selectedFile}
@@ -823,6 +809,16 @@ function App() {
           setRightPanel(null)
         }}
       />
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent
+          className="left-[2vw] top-[4vh] h-[92vh] max-h-[96vh] min-h-[520px] w-[96vw] max-w-[96vw] min-w-[min(760px,96vw)] translate-x-0 translate-y-0 resize overflow-hidden border-[#303238] bg-[#1b1c1f] p-0 text-[#d7dbe2]"
+          showCloseButton={false}
+          aria-describedby={undefined}
+        >
+          <DialogTitle className="sr-only">设置</DialogTitle>
+          <SettingsView onClose={() => setSettingsOpen(false)} />
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

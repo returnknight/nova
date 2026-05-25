@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { TooltipProvider } from './components/ui/tooltip'
@@ -14,7 +15,12 @@ describe('App', () => {
         '/api/workspace/summary': { title: '', author: '', chapter_count: 0, total_words: 0, chapters: [] },
         '/api/styles': { styles: [] },
         '/api/books': { books: [] },
-        '/api/settings': { effective: { max_open_tabs: 5 } },
+        '/api/settings': {
+          user: {},
+          workspace: {},
+          effective: { max_open_tabs: 5 },
+          paths: { nova_dir: '', user_config: '', workspace_config: '' },
+        },
         '/api/sessions': { sessions: [] },
         '/api/session/messages': [],
         '/api/chat/active': { active: false },
@@ -56,5 +62,22 @@ describe('App', () => {
     expect(screen.queryByLabelText('显示/隐藏任务面板')).not.toBeInTheDocument()
     expect(screen.queryByText('任务')).not.toBeInTheDocument()
     expect(screen.queryByText('写作流')).not.toBeInTheDocument()
+  })
+
+  it('opens settings as a global dialog outside editor tabs', async () => {
+    const user = userEvent.setup()
+    render(
+      <TooltipProvider>
+        <App />
+      </TooltipProvider>,
+    )
+
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith('/api/chat/active', undefined))
+    await user.click(screen.getByRole('button', { name: '设置' }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByRole('button', { name: 'IDE 模式' })).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: '互动模式' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '关闭 设置' })).not.toBeInTheDocument()
   })
 })

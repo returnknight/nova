@@ -159,7 +159,7 @@ export function StoryStage({ storyId, branchId, snapshot, onDone }: StoryStagePr
             输入第一句话，开始互动故事。
           </div>
         ) : (
-          <MessageList messages={messages} isStreaming={streaming} activityContent={activityContent} />
+          <MessageList messages={messages} isStreaming={streaming} activityContent={activityContent} highlightDialogue />
         )}
       </div>
       <div className="mt-3 rounded-xl border border-[#343b47] bg-[#101216] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
