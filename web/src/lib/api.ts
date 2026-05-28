@@ -79,7 +79,15 @@ export interface CharacterCardImportResult {
   entry_count: number
   item_count: number
   item_ids: string[]
+  workspace?: string
+  book_meta?: BookMeta
   message: string
+}
+
+export interface CharacterCardPreview {
+  name: string
+  entry_count: number
+  tags: string[]
 }
 
 /** 书籍元信息 */
@@ -501,10 +509,25 @@ export async function moveWorkspaceItem(req: CopyMoveRequest): Promise<FileOpera
   })
 }
 
-/** 导入酒馆角色卡 PNG/JSON 到互动资料库 */
-export async function importCharacterCard(file: File): Promise<CharacterCardImportResult> {
+/** 预览酒馆角色卡 PNG/JSON，不写入资料库 */
+export async function previewCharacterCard(file: File): Promise<CharacterCardPreview> {
   const form = new FormData()
   form.append('file', file)
+  return requestJSON('/api/workspace/import-character-card/preview', {
+    method: 'POST',
+    body: form,
+  })
+}
+
+/** 导入酒馆角色卡 PNG/JSON 到互动资料库 */
+export async function importCharacterCard(
+  file: File,
+  options: { targetMode?: 'current' | 'new_book'; bookTitle?: string } = {},
+): Promise<CharacterCardImportResult> {
+  const form = new FormData()
+  form.append('file', file)
+  if (options.targetMode) form.append('target_mode', options.targetMode)
+  if (options.bookTitle) form.append('book_title', options.bookTitle)
   return requestJSON('/api/workspace/import-character-card', {
     method: 'POST',
     body: form,

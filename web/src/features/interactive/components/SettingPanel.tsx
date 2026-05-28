@@ -62,7 +62,7 @@ const TELLER_TARGET_OPTIONS = [
     value: 'turn_context',
     label: '本轮上下文',
     summary: '每轮贴近用户行动',
-    detail: '每次生成下一回合时注入，强约束本轮裁定、NPC 主动反应、代价、暗线推进和行动空间。',
+    detail: '每次生成下一回合时注入，强约束本轮裁定、NPC 主动反应、代价、暗线推进和可选择。',
   },
   {
     value: 'state_memory',

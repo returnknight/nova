@@ -22,12 +22,21 @@ var pngSignature = []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}
 
 // CharacterCardImportResult 描述酒馆角色卡导入结果。
 type CharacterCardImportResult struct {
+	Name       string    `json:"name"`
+	TargetPath string    `json:"target_path"`
+	EntryCount int       `json:"entry_count"`
+	ItemCount  int       `json:"item_count"`
+	ItemIDs    []string  `json:"item_ids"`
+	Workspace  string    `json:"workspace,omitempty"`
+	BookMeta   *BookMeta `json:"book_meta,omitempty"`
+	Message    string    `json:"message"`
+}
+
+// CharacterCardPreview 描述酒馆角色卡预览信息，解析但不写入 workspace。
+type CharacterCardPreview struct {
 	Name       string   `json:"name"`
-	TargetPath string   `json:"target_path"`
 	EntryCount int      `json:"entry_count"`
-	ItemCount  int      `json:"item_count"`
-	ItemIDs    []string `json:"item_ids"`
-	Message    string   `json:"message"`
+	Tags       []string `json:"tags"`
 }
 
 type tavernCard struct {
@@ -128,6 +137,18 @@ func (s *Service) ImportTavernCharacterCard(filename string, data []byte) (Chara
 		Message:    fmt.Sprintf("已导入酒馆角色卡「%s」到互动资料库", card.Name),
 	}
 	return result, nil
+}
+
+func PreviewTavernCharacterCard(filename string, data []byte) (CharacterCardPreview, error) {
+	card, err := parseTavernCharacterCard(filename, data)
+	if err != nil {
+		return CharacterCardPreview{}, err
+	}
+	return CharacterCardPreview{
+		Name:       card.Name,
+		EntryCount: characterBookEntryCount(card.CharacterBook),
+		Tags:       tavernCardTags(card.Tags...),
+	}, nil
 }
 
 func parseTavernCharacterCard(filename string, data []byte) (normalizedTavernCard, error) {

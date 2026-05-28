@@ -86,9 +86,9 @@ export function SnapshotPanel({ snapshot }: { snapshot: Snapshot | null }) {
         <section className={panelSectionClass}>
           <div className={sectionTitleClass}>
             <Compass className="h-3.5 w-3.5" />
-            可行动空间
+            可选择
           </div>
-          <CompactList items={actionSpace} empty="暂无可行动入口" />
+          <CompactList items={actionSpace} empty="暂无可选择" />
         </section>
 
         <section className={panelSectionClass}>
@@ -370,7 +370,7 @@ function formatLabel(key: string) {
     obstacles: '阻碍',
     exits: '出口',
     interactive_objects: '可交互物',
-    action_space: '可行动空间',
+    action_space: '可选择',
     world_flags: '世界标记',
     rules: '世界规则',
     threads: '未解决线索',

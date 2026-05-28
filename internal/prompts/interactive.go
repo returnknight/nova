@@ -68,8 +68,8 @@ func BuildInteractiveStorySystemInstruction(in InteractiveStorySystemInstruction
 	sb.WriteString("- 不要创建或修改 chapters、outline、progress、characters 等文件；互动状态由后端的状态 Agent 异步维护。\n")
 	sb.WriteString("- 可以基于已注入的故事上下文、共享设定和当前快照继续剧情。\n\n")
 	sb.WriteString("## 互动主持人原则\n")
-	sb.WriteString("- 你不是普通续写器，而是文字小说 RPG 的故事主持人：每回合都要理解玩家行动、裁定世界反馈、维持角色与规则一致，并制造新的可行动空间。\n")
-	sb.WriteString("- 每一回合内部必须完成这条回合裁定循环，但不要把分析过程输出给用户：识别用户行动 → 判断相关角色与世界规则 → 裁定行动后果 → 推进场景 → 更新状态 → 打开新的行动空间 → 一致性自检。\n")
+	sb.WriteString("- 你不是普通续写器，而是文字小说 RPG 的故事主持人：每回合都要理解玩家行动、裁定世界反馈、维持角色与规则一致，并制造新的可选择。\n")
+	sb.WriteString("- 每一回合内部必须完成这条回合裁定循环，但不要把分析过程输出给用户：识别用户行动 → 判断相关角色与世界规则 → 裁定行动后果 → 推进场景 → 更新状态 → 打开新的可选择 → 一致性自检。\n")
 	sb.WriteString("- 用户输入优先视为主角的意图或行动；如果用户是在提问、观察、试探、对话或制定计划，要用场景内反馈承接，而不是只做问答解释。\n")
 	sb.WriteString("- 主角不是静止的摄像机。允许主角在本回合内观察、移动、试探、交谈、触碰物品、受到环境反馈，并和其他角色自然互动。\n")
 	sb.WriteString("- 其他角色有主观能动性：他们会依据性格、关系、目标、已知信息和当前风险主动反应，不要让角色长期沉默、空等或机械配合。\n")
@@ -106,7 +106,7 @@ func InteractiveStoryContext(in InteractiveStoryPromptInput) string {
 	sb.WriteString("3. 裁定后果：行动必须带来具体反馈，至少包含成功、部分成功、失败、代价、发现、阻碍、关系变化、风险升级中的一种；不要只复述用户输入。\n")
 	sb.WriteString("4. 推进场景：用小说正文呈现动作、感官、对白、环境反馈和角色主动反应；节奏要像互动故事现场，而不是设定说明书。\n")
 	sb.WriteString("5. 保留选择权：不要替用户完成重大选择、不可逆决定、长期目标或明显应由用户决定的行动。\n")
-	sb.WriteString("6. 打开行动空间：回合结尾自然露出可继续行动的入口，例如可询问的人、可探索的物、正在逼近的危险、可利用的资源、需要承担代价的捷径。\n")
+	sb.WriteString("6. 打开可选择：回合结尾自然露出可继续行动的入口，例如可询问的人、可探索的物、正在逼近的危险、可利用的资源、需要承担代价的捷径。\n")
 	sb.WriteString("7. 一致性自检：确认角色性格、说话方式、世界规则、已记录伤势/物品/位置/关系/时间没有被遗忘或矛盾改写。\n\n")
 	fmt.Fprintf(&sb, "本轮 NARRATIVE 目标长度约为 %d 个中文字以内。请主动控制篇幅，保证结尾完整收束到开放选择点。\n\n", normalizeInteractiveReplyTargetChars(in.ReplyTargetChars))
 	sb.WriteString("## 故事信息\n")
@@ -148,7 +148,7 @@ func InteractiveStoryTurnInstruction(message, turnContext string, randomEventRat
 		fmt.Fprintf(&sb, `
 
 讲述者随机事件率：%.2f。该值代表本轮主动引入意外、压力、转折或新线索的倾向；值越高，越应该让场景出现符合讲述者风格的扰动，但扰动必须遵守既有设定和因果。
-以上讲述者规则必须显著影响本轮剧情裁定、NPC 主动反应、代价、暗线推进和行动空间；不要把规则文本作为正文输出。
+以上讲述者规则必须显著影响本轮剧情裁定、NPC 主动反应、代价、暗线推进和可选择；不要把规则文本作为正文输出。
 `, randomEventRate)
 		turnBlock = sb.String()
 	}
@@ -157,8 +157,8 @@ func InteractiveStoryTurnInstruction(message, turnContext string, randomEventRat
 %s
 %s
 
-请基于互动故事上下文续写下一回合。只写读者应看到的故事正文。
-本回合必须隐式完成：识别用户行动、判断相关角色和世界规则、裁定后果、制造新的可行动空间、保持角色和世界一致性；不要输出这些分析过程。
+请基于互动故事上下文续写下一回合，并严格按输出协议返回：读者应看到的故事正文只能放在 <NARRATIVE> 内，下一步行动候选只能放在 <HOT_STATE> 内。
+本回合必须隐式完成：识别用户行动、判断相关角色和世界规则、裁定后果、制造新的可选择、保持角色和世界一致性；不要输出这些分析过程。
 本回合要让主角作为故事人物正常与环境、物品和其他角色互动，写出行动带来的反馈、代价、发现、阻碍或机会；不要每发生一个小动作就停下等待用户。
 其他角色应依据性格、目标、关系和当前局势主动反应。结尾请停在有意义的选择点、悬念点或决策点，让用户能决定下一步，但不要替用户做出重大选择。
 输出结尾必须追加 <HOT_STATE>{"choices":[...字符串...]}</HOT_STATE>，choices 写 2 到 5 条用户可直接采用或改写的下一步行动。不要输出 <STATE_DELTA>。`, strings.TrimSpace(message), turnBlock)
@@ -185,7 +185,7 @@ func InteractiveStateInstruction(in InteractiveStatePromptInput) string {
 	sb.WriteString("- inventory/resources：记录主角或队伍获得、失去、消耗、受限的物品与资源。\n")
 	sb.WriteString("- world_flags/rules：记录本轮激活或确认、后续必须遵守的世界规则、禁忌、能力边界、势力反应。\n")
 	sb.WriteString("- threads：记录尚未解决的线索、危机、承诺、倒计时和暗线压力。\n")
-	sb.WriteString("- action_space：记录当前已暴露的可行动入口，只写客观可行性，不写成给用户看的菜单。\n\n")
+	sb.WriteString("- action_space：记录当前已暴露的可选择入口，只写客观可行性，不写成给用户看的菜单。\n\n")
 	sb.WriteString("## 故事信息\n")
 	writeField(&sb, "标题", in.Title)
 	writeField(&sb, "开端", in.Origin)

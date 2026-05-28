@@ -245,20 +245,20 @@ export function StoryStage({ workspace, storyId, branchId, snapshot, onDone }: S
                 activityContent={activityContent}
                 highlightDialogue
                 scrollResetKey={scrollResetKey}
-                bottomPaddingClassName="pb-32"
+                bottomPaddingClassName="pb-6"
                 messageStyle={stageTextStyle}
               />
             )}
           </section>
         </div>
       </div>
-      <div className="pointer-events-none absolute inset-x-4 bottom-4 z-20 bg-gradient-to-t from-[var(--nova-surface-2)] via-[var(--nova-surface-2)] to-transparent pt-8">
-        <div className="pointer-events-auto rounded-[var(--nova-radius)] border border-[var(--nova-border)] bg-[var(--nova-surface)] p-3 shadow-[var(--nova-shadow)] backdrop-blur">
+      <div className="shrink-0 border-t border-[var(--nova-border)] bg-[var(--nova-surface)] p-3">
+        <div className="mx-auto max-w-5xl">
           {!streaming && hotChoices.length > 0 ? (
             <div className="mb-3 border-b border-[var(--nova-border)] pb-3">
               <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium text-[var(--nova-text-faint)]">
                 <Compass className="h-3.5 w-3.5" />
-                可行动空间
+                可选择
               </div>
               <div className="flex flex-wrap gap-2">
                 {hotChoices.map((choice, index) => (

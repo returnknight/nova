@@ -192,7 +192,7 @@ JSON 格式：
         "name": "本轮上下文",
         "target": "turn_context",
         "enabled": true,
-        "content": "每轮剧情裁定、输出风格、NPC 反应和行动空间规则"
+        "content": "每轮剧情裁定、输出风格、NPC 反应和可选择规则"
       },
       {
         "id": "state_memory",

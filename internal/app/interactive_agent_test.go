@@ -165,6 +165,14 @@ func TestParseInteractiveAssistantOutput(t *testing.T) {
 		t.Fatalf("unexpected hot state: %#v", hotState)
 	}
 
+	narrative, _, hotState, err = parseInteractiveAssistantOutput("门后传来风声。\n< hot_state >{\"choices\":[\"我推门进去。\"]}</hot_state>")
+	if err != nil || narrative != "门后传来风声。" {
+		t.Fatalf("expected spaced lowercase hot state to be hidden, narrative=%q hot=%#v err=%v", narrative, hotState, err)
+	}
+	if hotState == nil || len(hotState.Choices) != 1 || hotState.Choices[0] != "我推门进去。" {
+		t.Fatalf("unexpected lowercase hot state: %#v", hotState)
+	}
+
 	narrative, ops, hotState, err = parseInteractiveAssistantOutput("<NARRATIVE>只有正文。</NARRATIVE>")
 	if err != nil || narrative != "只有正文。" || len(ops) != 0 {
 		t.Fatalf("expected missing state delta to preserve narrative, narrative=%q ops=%#v err=%v", narrative, ops, err)

@@ -1,9 +1,9 @@
 const NARRATIVE_START = '<NARRATIVE>'
 const NARRATIVE_END = '</NARRATIVE>'
-const HOT_STATE_START = '<HOT_STATE>'
-const STATE_DELTA_START = '<STATE_DELTA>'
 
-const TAGS = [NARRATIVE_START, NARRATIVE_END, HOT_STATE_START, STATE_DELTA_START]
+const VISIBLE_TAGS = [NARRATIVE_START, NARRATIVE_END]
+const HIDDEN_TAG_PREFIXES = ['<hot_state', '<state_delta']
+const TAG_PREFIXES = [...VISIBLE_TAGS.map((tag) => tag.toLowerCase()), ...HIDDEN_TAG_PREFIXES]
 
 export function createInteractiveNarrativeFilter() {
   let buffer = ''
@@ -24,7 +24,7 @@ export function createInteractiveNarrativeFilter() {
   function drain(flushAll: boolean): string {
     let output = ''
     while (buffer) {
-      if (buffer.startsWith(HOT_STATE_START) || buffer.startsWith(STATE_DELTA_START)) {
+      if (startsWithHiddenTag(buffer)) {
         stopped = true
         buffer = ''
         return output
@@ -58,18 +58,36 @@ export function createInteractiveNarrativeFilter() {
 
 function findNextTag(value: string): number {
   let next = -1
-  for (const tag of TAGS) {
+  for (const tag of VISIBLE_TAGS) {
     const index = value.indexOf(tag)
     if (index >= 0 && (next < 0 || index < next)) next = index
   }
+  const lowerValue = value.toLowerCase()
+  const hiddenIndex = findHiddenTagIndex(lowerValue)
+  if (hiddenIndex >= 0 && (next < 0 || hiddenIndex < next)) next = hiddenIndex
   return next
 }
 
 function partialTagSuffixLength(value: string): number {
-  const max = Math.min(value.length, Math.max(...TAGS.map((tag) => tag.length)) - 1)
+  const lowerValue = value.toLowerCase()
+  const max = Math.min(value.length, Math.max(...TAG_PREFIXES.map((tag) => tag.length)) - 1)
   for (let length = max; length > 0; length--) {
-    const suffix = value.slice(value.length - length)
-    if (TAGS.some((tag) => tag.startsWith(suffix))) return length
+    const suffix = normalizeTagStart(lowerValue.slice(lowerValue.length - length))
+    if (TAG_PREFIXES.some((tag) => tag.startsWith(suffix))) return length
   }
   return 0
+}
+
+function startsWithHiddenTag(value: string): boolean {
+  const normalized = normalizeTagStart(value.toLowerCase())
+  return HIDDEN_TAG_PREFIXES.some((tag) => normalized.startsWith(tag))
+}
+
+function findHiddenTagIndex(value: string): number {
+  const match = /<\s*(hot_state|state_delta)/i.exec(value)
+  return match?.index ?? -1
+}
+
+function normalizeTagStart(value: string): string {
+  return value.replace(/^<\s*/, '<')
 }

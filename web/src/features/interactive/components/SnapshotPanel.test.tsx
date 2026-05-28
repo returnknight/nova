@@ -66,7 +66,7 @@ describe('SnapshotPanel', () => {
     expect(screen.getByText('找到柜台后的密门')).toBeInTheDocument()
     expect(screen.getByText('最后出现')).toBeInTheDocument()
     expect(screen.getByText('关系值')).toBeInTheDocument()
-    expect(screen.getByText('可行动空间')).toBeInTheDocument()
+    expect(screen.getByText('可选择')).toBeInTheDocument()
     expect(screen.getAllByText('地窖门').length).toBeGreaterThan(0)
     expect(screen.getByText('可能惊动柜台后的影子')).toBeInTheDocument()
     expect(screen.getByText('物品与资源')).toBeInTheDocument()

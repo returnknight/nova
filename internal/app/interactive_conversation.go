@@ -130,6 +130,10 @@ func (c *interactiveConversation) AppendAssistantWithThinking(content, thinking 
 		log.Printf("[interactive-agent] parse assistant output failed story_id=%s branch_id=%s err=%v content=%q", c.storyID, c.branchID, parseErr, content)
 		return parseErr
 	}
+	if hotState == nil {
+		hotState = fallbackHotStateFromNarrative(narrative)
+		log.Printf("[interactive-agent] hot state missing, generated fallback story_id=%s branch_id=%s choices=%d", c.storyID, c.branchID, hotStateChoiceCount(hotState))
+	}
 	log.Printf("[interactive-agent] parse assistant output result story_id=%s branch_id=%s narrative=%q hot_state_choices=%d ops=%s", c.storyID, c.branchID, narrative, hotStateChoiceCount(hotState), interactiveStateOpsLogJSON(ops))
 	turn, _, err := c.store.AppendTurnWithState(c.storyID, interactive.AppendTurnWithStateRequest{
 		BranchID:  c.branchID,
@@ -278,6 +282,18 @@ func hotStateChoiceCount(hot *interactive.HotState) int {
 		return 0
 	}
 	return len(hot.Choices)
+}
+
+func fallbackHotStateFromNarrative(narrative string) *interactive.HotState {
+	narrative = strings.TrimSpace(narrative)
+	if narrative == "" {
+		return nil
+	}
+	return &interactive.HotState{Choices: []string{
+		"我继续观察当前场景，寻找新的线索。",
+		"我询问在场角色，确认他们知道什么。",
+		"我先检查身边可用的物品、危险和退路。",
+	}}
 }
 
 func pendingHotStateChoices(snapshot interactive.Snapshot) []string {

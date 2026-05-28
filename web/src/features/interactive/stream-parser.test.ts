@@ -25,6 +25,17 @@ describe('createInteractiveNarrativeFilter', () => {
     expect(visible).toBe('门后传来风声。')
   })
 
+  it('hides lowercase or spaced hot state tags', () => {
+    const filter = createInteractiveNarrativeFilter()
+    const visible = [
+      filter.push('<NARRATIVE>门后传来风声。</NARRATIVE>\n< hot'),
+      filter.push('_state>{"choices":["我贴近门缝听里面的动静。"]}</hot_state>'),
+      filter.flush(),
+    ].join('')
+
+    expect(visible).toBe('门后传来风声。')
+  })
+
   it('handles tags split across chunks', () => {
     const filter = createInteractiveNarrativeFilter()
     const visible = [

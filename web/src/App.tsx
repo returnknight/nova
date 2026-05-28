@@ -10,11 +10,13 @@ import { SettingsView } from '@/features/settings/SettingsView'
 import { InteractiveLayout } from '@/features/interactive/components/InteractiveLayout'
 import { fetchSettings } from '@/features/settings/api'
 import { fontStackFor } from '@/features/settings/font-options'
-import { importCharacterCard } from '@/lib/api'
+import { importCharacterCard, previewCharacterCard, type CharacterCardPreview } from '@/lib/api'
 import { WorkspaceLayout } from '@/components/layout/workspace-layout'
 import { CommandPalette } from '@/components/common/command-palette'
 import { TooltipIconButton } from '@/components/common/tooltip-icon-button'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { useWorkspace } from '@/hooks/useWorkspace'
 import { useChat } from '@/hooks/useChat'
 import { useWorkspaceHotkeys } from '@/hooks/use-workspace-hotkeys'
@@ -47,6 +49,8 @@ const TABS_STORAGE_PREFIX = 'nova.layout.tabs:'
 const ACTIVE_TAB_STORAGE_PREFIX = 'nova.layout.activeTab:'
 const APP_VERSION = __APP_VERSION__
 const MAX_OPEN_TABS_FALLBACK = 5
+
+type CharacterCardTargetMode = 'current' | 'new_book'
 
 /** 编辑区 Tab：承载已打开文件。书籍管理使用全局弹窗，不占用编辑区 Tab。 */
 type Tab = { kind: 'file'; path: string }
@@ -156,6 +160,14 @@ function App() {
   const [maxOpenTabs, setMaxOpenTabs] = useState<number>(MAX_OPEN_TABS_FALLBACK)
   const [novaDir, setNovaDir] = useState('')
   const [sidebarView, setSidebarView] = useState<'outline' | 'files'>('outline')
+  const [characterCardDialogOpen, setCharacterCardDialogOpen] = useState(false)
+  const [characterCardFile, setCharacterCardFile] = useState<File | null>(null)
+  const [characterCardPreview, setCharacterCardPreview] = useState<CharacterCardPreview | null>(null)
+  const [characterCardTargetMode, setCharacterCardTargetMode] = useState<CharacterCardTargetMode>('current')
+  const [characterCardBookTitle, setCharacterCardBookTitle] = useState('')
+  const [characterCardPreviewing, setCharacterCardPreviewing] = useState(false)
+  const [characterCardImporting, setCharacterCardImporting] = useState(false)
+  const [characterCardError, setCharacterCardError] = useState('')
   const characterCardInputRef = useRef<HTMLInputElement>(null)
   const chatBootstrappedRef = useRef(false)
   // 记录每个 tab 最后一次激活的时间戳（递增计数器），用于 LRU 淘汰
@@ -405,23 +417,84 @@ function App() {
     await selectFile(path)
   }, [limitTabs, selectFile, setSelectedChapterId])
 
+  const resetCharacterCardImport = useCallback(() => {
+    setCharacterCardFile(null)
+    setCharacterCardPreview(null)
+    setCharacterCardTargetMode(workspace ? 'current' : 'new_book')
+    setCharacterCardBookTitle('')
+    setCharacterCardPreviewing(false)
+    setCharacterCardImporting(false)
+    setCharacterCardError('')
+    if (characterCardInputRef.current) {
+      characterCardInputRef.current.value = ''
+    }
+  }, [workspace])
+
+  const handleCharacterCardDialogOpenChange = useCallback((open: boolean) => {
+    setCharacterCardDialogOpen(open)
+    if (!open) resetCharacterCardImport()
+    if (open && !workspace) setCharacterCardTargetMode('new_book')
+  }, [resetCharacterCardImport, workspace])
+
   const handleCharacterCardSelected = useCallback(async (file: File | undefined) => {
     if (!file) return
+    setCharacterCardFile(file)
+    setCharacterCardPreview(null)
+    setCharacterCardTargetMode(workspace ? 'current' : 'new_book')
+    setCharacterCardError('')
+    setCharacterCardPreviewing(true)
     try {
-      const result = await importCharacterCard(file)
-      toast.success(result.message || `已导入酒馆角色卡「${result.name}」`)
-      window.dispatchEvent(new CustomEvent('nova:lore-updated', { detail: result }))
-      setMode('interactive')
-      useInteractiveStore.getState().setSubmode('lore')
-      notifyGitChange()
+      const preview = await previewCharacterCard(file)
+      setCharacterCardPreview(preview)
+      setCharacterCardBookTitle(preview.name)
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : '导入酒馆角色卡失败')
+      setCharacterCardError(e instanceof Error ? e.message : '解析酒馆角色卡失败')
     } finally {
+      setCharacterCardPreviewing(false)
       if (characterCardInputRef.current) {
         characterCardInputRef.current.value = ''
       }
     }
-  }, [notifyGitChange, setMode])
+  }, [workspace])
+
+  const handleCharacterCardImport = useCallback(async () => {
+    if (!characterCardFile) {
+      setCharacterCardError('请先选择酒馆角色卡文件')
+      return
+    }
+    if (characterCardTargetMode === 'current' && !workspace) {
+      setCharacterCardError('当前没有打开的书籍，请选择“导入成新书”')
+      return
+    }
+    setCharacterCardImporting(true)
+    setCharacterCardError('')
+    try {
+      const result = await importCharacterCard(characterCardFile, {
+        targetMode: characterCardTargetMode,
+        bookTitle: characterCardTargetMode === 'new_book' ? characterCardBookTitle.trim() : undefined,
+      })
+      toast.success(result.message || `已导入酒馆角色卡「${result.name}」`)
+      if (characterCardTargetMode === 'new_book') {
+        await refreshAll()
+      } else {
+        await refresh()
+      }
+      setMode('interactive')
+      useInteractiveStore.getState().setSubmode('lore')
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('nova:lore-updated', { detail: result }))
+      }, 0)
+      notifyGitChange()
+      setCharacterCardDialogOpen(false)
+      resetCharacterCardImport()
+    } catch (e) {
+      const message = e instanceof Error ? e.message : '导入酒馆角色卡失败'
+      setCharacterCardError(message)
+      toast.error(message)
+    } finally {
+      setCharacterCardImporting(false)
+    }
+  }, [characterCardBookTitle, characterCardFile, characterCardTargetMode, notifyGitChange, refresh, refreshAll, resetCharacterCardImport, setMode, workspace])
 
   /** 激活某个文件 tab 并加载内容。 */
   const handleActivateTab = useCallback((tab: Tab) => {
@@ -535,9 +608,8 @@ function App() {
       </TooltipIconButton>
       <TooltipIconButton
         label="导入酒馆角色卡"
-        onClick={() => characterCardInputRef.current?.click()}
+        onClick={() => handleCharacterCardDialogOpenChange(true)}
         className="nova-icon-button"
-        disabled={!workspace}
       >
         <Upload className="h-4 w-4" />
       </TooltipIconButton>
@@ -813,6 +885,114 @@ function App() {
           setRightPanel(null)
         }}
       />
+      <Dialog open={characterCardDialogOpen} onOpenChange={handleCharacterCardDialogOpenChange}>
+        <DialogContent
+          className="nova-panel w-[min(520px,calc(100vw-2rem))] max-w-[min(520px,calc(100vw-2rem))] rounded-[var(--nova-radius)] border border-[var(--nova-border)] bg-[var(--nova-surface-2)] p-0 text-[var(--nova-text)] shadow-[var(--nova-shadow)]"
+          aria-describedby="character-card-import-desc"
+        >
+          <div className="border-b border-[var(--nova-border)] px-4 py-3">
+            <DialogTitle className="text-sm font-semibold text-[var(--nova-text)]">导入酒馆角色卡</DialogTitle>
+            <DialogDescription id="character-card-import-desc" className="mt-1 text-xs text-[var(--nova-text-faint)]">
+              选择 PNG 或 JSON 角色卡，并决定写入当前书还是创建一本新书。
+            </DialogDescription>
+          </div>
+          <div className="space-y-4 px-4 py-4 text-xs">
+            <div className="flex min-w-0 items-center gap-2">
+              <Button
+                type="button"
+                size="xs"
+                variant="ghost"
+                className="nova-nav-item border border-[var(--nova-border)] bg-[var(--nova-surface)] text-[var(--nova-text)]"
+                onClick={() => characterCardInputRef.current?.click()}
+                disabled={characterCardPreviewing || characterCardImporting}
+              >
+                <Upload className="h-3.5 w-3.5" />
+                选择文件
+              </Button>
+              <div className="min-w-0 flex-1 truncate text-[var(--nova-text-faint)]">
+                {characterCardFile ? characterCardFile.name : '未选择文件'}
+              </div>
+              {characterCardPreviewing && <span className="shrink-0 text-[var(--nova-text-muted)]">解析中...</span>}
+            </div>
+
+            {characterCardPreview && (
+              <div className="rounded-[var(--nova-radius)] border border-[var(--nova-border)] bg-[var(--nova-surface)] px-3 py-2">
+                <div className="truncate text-sm font-medium text-[var(--nova-text)]">{characterCardPreview.name}</div>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-[var(--nova-text-faint)]">
+                  <span>{characterCardPreview.entry_count} 个世界书条目</span>
+                  {characterCardPreview.tags?.map((tag) => (
+                    <span key={tag} className="rounded border border-[var(--nova-border)] bg-[var(--nova-surface-2)] px-1.5 text-[var(--nova-text-muted)]">{tag}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2 rounded-[var(--nova-radius)] bg-[var(--nova-surface)] p-1">
+              <button
+                type="button"
+                className={`nova-nav-item h-8 px-3 text-xs ${characterCardTargetMode === 'current' ? 'is-active' : ''}`}
+                onClick={() => setCharacterCardTargetMode('current')}
+                disabled={!workspace || characterCardImporting}
+                title={workspace ? '导入到当前书籍资料库' : '当前没有打开的书籍'}
+              >
+                导入到本书
+              </button>
+              <button
+                type="button"
+                className={`nova-nav-item h-8 px-3 text-xs ${characterCardTargetMode === 'new_book' ? 'is-active' : ''}`}
+                onClick={() => setCharacterCardTargetMode('new_book')}
+                disabled={characterCardImporting}
+              >
+                导入成新书
+              </button>
+            </div>
+
+            {characterCardTargetMode === 'current' ? (
+              <div className="rounded-[var(--nova-radius)] border border-[var(--nova-border)] bg-[var(--nova-surface)] px-3 py-2 text-[var(--nova-text-faint)]">
+                当前书籍：<span className="text-[var(--nova-text-muted)]">{workspace ? currentBookName : '未选择书籍'}</span>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Input
+                  value={characterCardBookTitle}
+                  onChange={(e) => setCharacterCardBookTitle(e.target.value)}
+                  placeholder={characterCardPreview?.name || '新书书名'}
+                  className="nova-field w-full rounded-[var(--nova-radius)] border px-2.5 py-1.5 outline-none placeholder:text-[var(--nova-text-faint)] focus:border-[#3a3a3a] focus:bg-[var(--nova-surface-3)]"
+                  disabled={characterCardImporting}
+                />
+                <div className="truncate text-[11px] text-[var(--nova-text-faint)]">新书将创建在 {novaDir || 'Nova 数据目录'}</div>
+              </div>
+            )}
+
+            {characterCardError && (
+              <div className="rounded-[var(--nova-radius)] border border-red-500/30 bg-red-500/10 px-3 py-2 text-red-200">
+                {characterCardError}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center justify-end gap-2 border-t border-[var(--nova-border)] px-4 py-3">
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              className="nova-nav-item border border-transparent text-[var(--nova-text-muted)]"
+              onClick={() => handleCharacterCardDialogOpenChange(false)}
+              disabled={characterCardImporting}
+            >
+              取消
+            </Button>
+            <Button
+              type="button"
+              size="xs"
+              className="border border-[var(--nova-border)] bg-[var(--nova-active)] text-[var(--nova-text)] hover:bg-[var(--nova-hover)]"
+              onClick={handleCharacterCardImport}
+              disabled={!characterCardFile || !characterCardPreview || characterCardPreviewing || characterCardImporting}
+            >
+              {characterCardImporting ? '导入中...' : '导入'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog open={bookManagerOpen} onOpenChange={setBookManagerOpen}>
         <DialogContent
           className="nova-panel left-[2vw] top-[4vh] h-[92vh] max-h-[96vh] min-h-[520px] w-[96vw] max-w-[96vw] min-w-[min(760px,96vw)] translate-x-0 translate-y-0 resize overflow-hidden rounded-[var(--nova-radius)] border border-[var(--nova-border)] bg-[var(--nova-surface-2)] p-0 text-[var(--nova-text)] shadow-[var(--nova-shadow)] sm:max-w-[96vw]"

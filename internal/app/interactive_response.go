@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"regexp"
 	"strings"
 
 	"nova/internal/interactive"
@@ -12,8 +13,6 @@ import (
 const (
 	narrativeStartTag  = "<NARRATIVE>"
 	narrativeEndTag    = "</NARRATIVE>"
-	hotStateStartTag   = "<HOT_STATE>"
-	hotStateEndTag     = "</HOT_STATE>"
 	stateDeltaStartTag = "<STATE_DELTA>"
 	stateDeltaEndTag   = "</STATE_DELTA>"
 )
@@ -25,6 +24,12 @@ type interactiveStatePayload struct {
 type interactiveHotStatePayload struct {
 	Choices []string `json:"choices"`
 }
+
+var (
+	hotStateStartPattern    = regexp.MustCompile(`(?i)<\s*hot_state\s*>`)
+	hotStateEndPattern      = regexp.MustCompile(`(?i)<\s*/\s*hot_state\s*>`)
+	hiddenStateStartPattern = regexp.MustCompile(`(?i)<\s*(hot_state|state_delta)\s*>?`)
+)
 
 func parseInteractiveAssistantOutput(content string) (string, []interactive.StateOp, *interactive.HotState, error) {
 	narrative := extractNarrative(content)
@@ -59,7 +64,7 @@ func parseInteractiveStateOps(content string) ([]interactive.StateOp, error) {
 }
 
 func parseInteractiveHotState(content string) (*interactive.HotState, error) {
-	stateBlock, ok := extractBetween(content, hotStateStartTag, hotStateEndTag)
+	stateBlock, ok := extractPatternBlock(content, hotStateStartPattern, hotStateEndPattern)
 	if !ok || strings.TrimSpace(stateBlock) == "" {
 		return nil, nil
 	}
@@ -97,17 +102,10 @@ func extractNarrative(content string) string {
 }
 
 func firstHiddenStateTagIndex(content string) int {
-	indexes := []int{
-		strings.Index(content, hotStateStartTag),
-		strings.Index(content, stateDeltaStartTag),
+	if loc := hiddenStateStartPattern.FindStringIndex(content); loc != nil {
+		return loc[0]
 	}
-	best := -1
-	for _, idx := range indexes {
-		if idx >= 0 && (best < 0 || idx < best) {
-			best = idx
-		}
-	}
-	return best
+	return -1
 }
 
 func extractBetween(content, startTag, endTag string) (string, bool) {
@@ -121,6 +119,19 @@ func extractBetween(content, startTag, endTag string) (string, bool) {
 		return content[start:], true
 	}
 	return content[start : start+end], true
+}
+
+func extractPatternBlock(content string, startPattern, endPattern *regexp.Regexp) (string, bool) {
+	start := startPattern.FindStringIndex(content)
+	if start == nil {
+		return "", false
+	}
+	bodyStart := start[1]
+	end := endPattern.FindStringIndex(content[bodyStart:])
+	if end == nil {
+		return content[bodyStart:], true
+	}
+	return content[bodyStart : bodyStart+end[0]], true
 }
 
 func extractJSONPayload(content string) string {
